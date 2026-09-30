@@ -1,0 +1,13 @@
+# Local credentials
+.env
+.env.*
+!.env.example
+secrets/
+certs/
+*.key
+*.pem
+
+# Runtime data and logs
+jenkins_home/
+docker-data/
+*.log
