@@ -1,0 +1,76 @@
+name: assessment2
+
+services:
+  # Docker daemon for pipeline builds and containers.
+  docker:
+    image: docker:29-dind
+    # Standard DinD requires privileged mode.
+    privileged: true
+    restart: unless-stopped
+    environment:
+      # Generate certificates for encrypted Docker connections.
+      DOCKER_TLS_CERTDIR: /certs
+    volumes:
+      # Persist Docker TLS certificates.
+      - docker-certs:/certs
+      # Share client certificates with Jenkins.
+      - docker-client-certs:/certs/client
+      # Persist Docker images and build data.
+      - docker-data:/var/lib/docker
+      # Persist containerd image content.
+      - containerd-data:/var/lib/containerd
+      # Share Jenkins workspaces with the Docker daemon.
+      - jenkins-data:/var/jenkins_home
+    networks:
+      - ci
+    healthcheck:
+      # Wait until the Docker daemon responds.
+      test: ["CMD", "docker", "info"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 30s
+    # Docker daemon ports are not published to the host.
+
+  # Jenkins controller using our custom image.
+  jenkins:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: assessment2-jenkins:2.580.1
+    restart: unless-stopped
+    depends_on:
+      docker:
+        condition: service_healthy
+    environment:
+      # Connect to DinD using verified TLS.
+      DOCKER_HOST: tcp://docker:2376
+      DOCKER_TLS_VERIFY: "1"
+      DOCKER_CERT_PATH: /certs/client
+    ports:
+      # Restrict Jenkins browser access to this computer.
+      - "127.0.0.1:8080:8080"
+    volumes:
+      # Preserve Jenkins settings, jobs, and build records.
+      - jenkins-data:/var/jenkins_home
+      # Allow read-only access to Docker client certificates.
+      - docker-client-certs:/certs/client:ro
+    networks:
+      - ci
+
+networks:
+  # Dedicated network with outbound access for downloads.
+  ci:
+    driver: bridge
+
+volumes:
+  # Jenkins configuration, workspaces, and archived artifacts.
+  jenkins-data:
+  # Docker daemon TLS certificates.
+  docker-certs:
+  # Client certificates shared with Jenkins.
+  docker-client-certs:
+  # Docker runtime and build data.
+  docker-data:
+  # Containerd image storage.
+  containerd-data:
